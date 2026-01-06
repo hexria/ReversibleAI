@@ -1,6 +1,5 @@
 # ReversibleAI
 
-[![CI/CD Pipeline](https://github.com/reversibleai/reversibleai/workflows/CI/CD%20Pipeline/badge.svg)](https://github.com/reversibleai/reversibleai/actions)
 [![codecov](https://codecov.io/gh/reversibleai/reversibleai/branch/main/graph/badge.svg)](https://codecov.io/gh/reversibleai/reversibleai)
 [![PyPI version](https://badge.fury.io/py/reversibleai.svg)](https://badge.fury.io/py/reversibleai)
 [![Python versions](https://img.shields.io/pypi/pyversions/reversibleai.svg)](https://pypi.org/project/reversibleai/)
