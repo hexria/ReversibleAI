@@ -39,10 +39,10 @@ class ControlFlowAnalyzer:
             self.cfg.add_node(
                 func_name,
                 type="function",
-                address=func["start_address"],
-                size=func["size"],
-                instruction_count=func["instruction_count"],
-                basic_block_count=func["basic_block_count"]
+                address=func.get("start_address", 0),
+                size=func.get("size", 0),
+                instruction_count=func.get("instruction_count", 0),
+                basic_block_count=func.get("basic_block_count", 0)
             )
         
         # Add inter-procedural edges (function calls)

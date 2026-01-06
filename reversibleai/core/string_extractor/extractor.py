@@ -106,10 +106,16 @@ class StringExtractor:
     def _read_file_data(self) -> Optional[bytes]:
         """Read file data"""
         try:
+            if not self.file_path.exists():
+                from ..exceptions import LoaderError
+                raise LoaderError(f"File not found: {self.file_path}", file_path=str(self.file_path))
             with open(self.file_path, 'rb') as f:
                 return f.read()
         except Exception as e:
             logger.error(f"Failed to read file {self.file_path}: {e}")
+            from ..exceptions import LoaderError
+            if isinstance(e, (FileNotFoundError, OSError)):
+                raise LoaderError(f"File not found: {self.file_path}", file_path=str(self.file_path)) from e
             return None
     
     def _extract_ascii_strings(self, min_length: int) -> List[StringInfo]:
@@ -213,6 +219,8 @@ class StringExtractor:
         if not string_value:
             return 0.0
         
+        import math
+        
         # Count character frequencies
         char_counts = defaultdict(int)
         for char in string_value:
@@ -224,7 +232,8 @@ class StringExtractor:
         
         for count in char_counts.values():
             probability = count / string_length
-            entropy -= probability * (probability.bit_length() - 1)
+            if probability > 0:
+                entropy -= probability * math.log2(probability)
         
         return entropy
     

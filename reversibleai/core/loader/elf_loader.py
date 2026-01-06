@@ -92,7 +92,7 @@ class ELFLoader(BaseLoader):
             return []
         
         imports = []
-        if self.elf.has_dynamic_symbols:
+        if self.elf.has_dynamic_symbol:
             for symbol in self.elf.dynamic_symbols:
                 if symbol.imported:
                     imports.append({

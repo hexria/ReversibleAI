@@ -83,7 +83,7 @@ def create_parser() -> argparse.ArgumentParser:
     """Create command line argument parser with Rich styling"""
     parser = argparse.ArgumentParser(
         prog="reversibleai",
-        description=Text("🔍 ReversibleAI - Advanced Static & Dynamic Analysis Framework", style="bold blue"),
+        description="🔍 ReversibleAI - Advanced Static & Dynamic Analysis Framework",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

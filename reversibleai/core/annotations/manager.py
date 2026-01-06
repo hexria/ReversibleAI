@@ -75,6 +75,9 @@ class AnnotationManager:
     
     def get_function_annotation(self, address: int) -> Optional[FunctionAnnotation]:
         """Get function annotation by address"""
+        if not self.database:
+            logger.warning("Database not available, cannot get annotation")
+            return None
         return self.database.get_function_annotation(address)
     
     def get_function_annotations_by_name(self, name: str) -> List[FunctionAnnotation]:

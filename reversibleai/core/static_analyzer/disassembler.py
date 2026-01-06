@@ -62,13 +62,13 @@ class Disassembler:
         try:
             # Map architecture names to Capstone constants
             arch_map = {
-                "x86": capstone.x86.X86_ARCH,
-                "x86_64": capstone.x86.X86_ARCH,
-                "arm": capstone.arm.ARM_ARCH,
-                "aarch64": capstone.arm64.ARM64_ARCH,
-                "mips": capstone.mips.MIPS_ARCH,
-                "ppc": capstone.ppc.PPC_ARCH,
-                "riscv": capstone.riscv.RISCV_ARCH,
+                "x86": capstone.CS_ARCH_X86,
+                "x86_64": capstone.CS_ARCH_X86,
+                "arm": capstone.CS_ARCH_ARM,
+                "aarch64": capstone.CS_ARCH_AARCH64,
+                "mips": capstone.CS_ARCH_MIPS,
+                "ppc": capstone.CS_ARCH_PPC,
+                "riscv": capstone.CS_ARCH_RISCV,
             }
             
             if self.architecture not in arch_map:
@@ -76,17 +76,17 @@ class Disassembler:
             
             # Determine mode
             if self.architecture in ["x86", "x86_64"]:
-                mode = capstone.x86.X86_MODE_64 if self.bits == 64 else capstone.x86.X86_MODE_32
+                mode = capstone.CS_MODE_64 if self.bits == 64 else capstone.CS_MODE_32
             elif self.architecture == "arm":
-                mode = capstone.arm.ARM_MODE_ARM
+                mode = capstone.CS_MODE_ARM
             elif self.architecture == "aarch64":
-                mode = capstone.arm64.ARM64_MODE_ARM
+                mode = capstone.CS_MODE_ARM  # AARCH64 uses ARM mode
             elif self.architecture == "mips":
-                mode = capstone.mips.MIPS_MODE_32 if self.bits == 32 else capstone.mips.MIPS_MODE_64
+                mode = capstone.CS_MODE_MIPS32 if self.bits == 32 else capstone.CS_MODE_MIPS64
             elif self.architecture == "ppc":
-                mode = capstone.ppc.PPC_MODE_32 if self.bits == 32 else capstone.ppc.PPC_MODE_64
+                mode = capstone.CS_MODE_32 if self.bits == 32 else capstone.CS_MODE_64
             elif self.architecture == "riscv":
-                mode = capstone.riscv.RISCV_MODE_32 if self.bits == 32 else capstone.riscv.RISCV_MODE_64
+                mode = capstone.CS_MODE_RISCV32 if self.bits == 32 else capstone.CS_MODE_RISCV64
             else:
                 raise ValueError(f"Unsupported mode for architecture: {self.architecture}")
             

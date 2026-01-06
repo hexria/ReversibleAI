@@ -44,6 +44,7 @@ class HashPatternMatcher:
     
     def __init__(self, signature_db_path: Optional[Path] = None) -> None:
         self.signature_db_path = signature_db_path
+        self.db_path = signature_db_path  # Alias for compatibility
         self.patterns: Dict[str, List[HashPattern]] = defaultdict(list)
         self.matches: List[HashMatch] = []
         
@@ -53,6 +54,8 @@ class HashPatternMatcher:
         # Load external patterns if provided
         if signature_db_path and signature_db_path.exists():
             self._load_external_patterns(signature_db_path)
+        elif signature_db_path and not signature_db_path.exists():
+            logger.warning(f"Signature database not found: {signature_db_path}, using built-in patterns only")
     
     def _load_builtin_patterns(self) -> None:
         """Load built-in hash patterns"""
