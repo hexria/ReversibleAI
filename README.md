@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python versions](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
-[![Development Status](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/reversibleai/reversibleai)
+[![Development Status](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/hexria/ReversibleAI)
 
 **ReversibleAI** - Advanced Static & Dynamic Analysis Framework for Malware Analysis and Reverse Engineering
 
@@ -23,8 +23,8 @@ Since ReversibleAI is currently in active development, installation from source 
 
 ```bash
 # Clone the repository
-git clone https://github.com/reversibleai/reversibleai.git
-cd reversibleai
+git clone https://github.com/hexria/ReversibleAI.git
+cd ReversibleAI
 
 # Install in development mode
 pip install -e .
@@ -202,7 +202,7 @@ MIT License - see [LICENSE](LICENSE) file for details
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/reversibleai/reversibleai/issues)
+- **Issues**: [GitHub Issues](https://github.com/hexria/ReversibleAI/issues)
 - **Email**: info@reversibleai.com
 
 ## Development Status

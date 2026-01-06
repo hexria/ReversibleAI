@@ -80,10 +80,10 @@ ml = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/reversibleai/reversibleai"
+Homepage = "https://github.com/hexria/ReversibleAI"
 Documentation = "https://reversibleai.readthedocs.io"
-Repository = "https://github.com/reversibleai/reversibleai"
-"Bug Tracker" = "https://github.com/reversibleai/reversibleai/issues"
+Repository = "https://github.com/hexria/ReversibleAI"
+"Bug Tracker" = "https://github.com/hexria/ReversibleAI/issues"
 
 [project.scripts]
 reversibleai = "reversibleai.cli.main:main"
