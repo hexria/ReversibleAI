@@ -59,6 +59,10 @@ class AnnotationManager:
     
     def add_function_annotation(self, annotation: FunctionAnnotation) -> bool:
         """Add a function annotation"""
+        if not self.database:
+            logger.warning("Database not available, cannot add annotation")
+            return False
+        
         try:
             success = self.database.add_function_annotation(annotation)
             if success:
@@ -74,11 +78,27 @@ class AnnotationManager:
     
     def get_function_annotations_by_name(self, name: str) -> List[FunctionAnnotation]:
         """Get function annotations by name"""
-        return self.database.get_function_annotations_by_name(name)
+        if not self.database:
+            logger.warning("Database not available, cannot search functions")
+            return []
+        
+        try:
+            return self.database.get_function_annotations_by_name(name)
+        except Exception as e:
+            logger.error(f"Failed to search functions: {e}")
+            return []
     
     def search_function_annotations(self, query: str) -> List[FunctionAnnotation]:
         """Search function annotations"""
-        return self.database.search_function_annotations(query)
+        if not self.database:
+            logger.warning("Database not available, cannot search functions")
+            return []
+        
+        try:
+            return self.database.search_function_annotations(query)
+        except Exception as e:
+            logger.error(f"Failed to search functions: {e}")
+            return []
     
     def update_function_annotation(self, annotation: FunctionAnnotation) -> bool:
         """Update a function annotation"""
@@ -104,6 +124,10 @@ class AnnotationManager:
     
     def add_comment(self, comment: CommentAnnotation) -> bool:
         """Add a comment annotation"""
+        if not self.database:
+            logger.warning("Database not available, cannot add comment")
+            return False
+        
         try:
             success = self.database.add_comment(comment)
             if success:
@@ -115,14 +139,26 @@ class AnnotationManager:
     
     def get_comments(self, address: Optional[int] = None) -> List[CommentAnnotation]:
         """Get comments, optionally filtered by address"""
-        return self.database.get_comments(address)
+        if not self.database:
+            logger.warning("Database not available, cannot get comments")
+            return []
+        
+        try:
+            return self.database.get_comments(address)
+        except Exception as e:
+            logger.error(f"Failed to get comments: {e}")
+            return []
     
     def update_comment(self, comment: CommentAnnotation) -> bool:
         """Update a comment"""
+        if not self.database:
+            logger.warning(" Database not available, cannot update comment")
+            return False
+        
         try:
             success = self.database.update_comment(comment)
             if success:
-                logger.debug(f"Updated comment at {hex(comment.address)}")
+                logger.info(f"Updated comment at {hex(comment.address)}")
             return success
         except Exception as e:
             logger.error(f"Failed to update comment: {e}")
@@ -130,10 +166,14 @@ class AnnotationManager:
     
     def remove_comment(self, address: int, comment_id: str) -> bool:
         """Remove a comment"""
+        if not self.database:
+            logger.warning("Database not available, cannot remove comment")
+            return False
+        
         try:
             success = self.database.remove_comment(address, comment_id)
             if success:
-                logger.debug(f"Removed comment at {hex(address)}")
+                logger.info(f"Removed comment at {hex(address)}")
             return success
         except Exception as e:
             logger.error(f"Failed to remove comment: {e}")
@@ -141,62 +181,50 @@ class AnnotationManager:
     
     def auto_annotate_functions(self, functions: List[Dict[str, Any]]) -> int:
         """Automatically annotate functions based on patterns and API info"""
+        if not self.database:
+            logger.warning("Database not available, cannot auto-annotate functions")
+            return 0
+        
         annotated_count = 0
         
-        for func in functions:
-            address = func.get('start_address', 0)
-            name = func.get('name', '')
-            
-            # Skip if already annotated
-            if self.get_function_annotation(address):
-                continue
-            
-            # Try to get API information
-            api_info = self.api_info.get_function_info(name)
-            
-            if api_info:
-                annotation = FunctionAnnotation(
-                    address=address,
-                    name=name,
-                    description=api_info.get('description', ''),
-                    parameters=api_info.get('parameters', []),
-                    return_value=api_info.get('return_value', {}),
-                    calling_convention=api_info.get('calling_convention', 'unknown'),
-                    tags=api_info.get('tags', []),
-                    confidence=api_info.get('confidence', 0.5),
-                    source='automatic',
-                    metadata={'api_source': api_info.get('source', 'unknown')}
-                )
+        try:
+            for func in functions:
+                if self._should_annotate_by_pattern(func):
+                    annotation = FunctionAnnotation(
+                        address=func.get('start_address', 0),
+                        name=func.get('name', ''),
+                        description=self.api_info.get_function_info(func.get('name', '')),
+                        parameters=func.get('parameters', []),
+                        return_value=func.get('return_value', {}),
+                        calling_convention=self.api_info.get_calling_convention(func.get('name', 'unknown')),
+                        tags=self.api_info.get_tags(func.get('name', [])),
+                        confidence=0.7,  # Default confidence
+                        source='automatic',
+                        metadata={'auto_annotated': True}
+                    )
+                    
+                    success = self.add_function_annotation(annotation)
+                    if success:
+                        annotated_count += 1
                 
-                if self.add_function_annotation(annotation):
-                    annotated_count += 1
+            logger.info(f"Auto-annotated {annotated_count} functions")
+            return annotated_count
             
-            # Try pattern-based annotation
-            elif self._should_annotate_by_pattern(func):
-                annotation = self._create_pattern_annotation(func)
-                if annotation and self.add_function_annotation(annotation):
-                    annotated_count += 1
-        
-        logger.info(f"Auto-annotated {annotated_count} functions")
-        return annotated_count
+        except Exception as e:
+            logger.error(f"Failed to auto-annotate functions: {e}")
+            return 0
     
     def _should_annotate_by_pattern(self, func: Dict[str, Any]) -> bool:
         """Check if function should be annotated based on patterns"""
         name = func.get('name', '').lower()
-        instructions = func.get('instructions', [])
         
         # Check for common patterns
-        if any(pattern in name for pattern in ['main', 'start', 'entry', 'dllmain']):
+        if any(pattern in name for pattern in ['main', 'start', 'entry', 'dllmain', 'winmain', 'tls_callback', 'sub_', 'init', "start_"]):
             return True
         
-        # Check for API call patterns
-        for insn in instructions:
-            mnemonic = insn.get('mnemonic', '').lower()
-            operands = insn.get('operands', '').lower()
-            
-            if mnemonic == 'call':
-                if any(api in operands for api in ['createfile', 'readfile', 'writefile', 'closehandle']):
-                    return True
+        # Check for obfuscation patterns
+        if any(pattern in name for pattern in ['sub_', 'xor', 'decode', 'encrypt', 'decrypt', 'hash', 'calc', 'compute']):
+            return True
         
         return False
     
@@ -382,14 +410,25 @@ class AnnotationManager:
                 elif any(api in operands for api in ['socket', 'connect', 'send', 'recv']):
                     api_calls.append('networking')
         
-        if api_calls:
             suggestions.append({
-                'type': 'pattern_match',
-                'confidence': 0.6,
-                'annotation': {
-                    'description': f"Function performs {', '.join(set(api_calls))}",
-                    'tags': list(set(api_calls))
-                }
+                'type': 'api_match',
+                'confidence': api_info.get('confidence', 0.5),
+                'annotation': api_info
             })
+        
+    # Check for instruction patterns
+    api_calls = []
+    for insn in instructions:
+        mnemonic = insn.get('mnemonic', '').lower()
+        operands = insn.get('operands', '').lower()
+            
+        if mnemonic == 'call':
+            if any(api in operands for api in ['createfile', 'readfile', 'writefile']):
+                api_calls.append('file_operations')
+            elif any(api in operands for api in ['createmutex', 'waitforsingleobject']):
+                api_calls.append('synchronization')
+            elif any(api in operands for api in ['socket', 'connect', 'send', 'recv']):
+                api_calls.append('networking')
+            return True
         
         return suggestions
