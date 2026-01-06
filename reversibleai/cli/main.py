@@ -6,13 +6,39 @@ import argparse
 import sys
 from pathlib import Path
 from typing import Optional
+import time
 
-from loguru import logger
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
+from rich.table import Table
+from rich.panel import Panel
+from rich.text import Text
+from rich.theme import Theme
+
+try:
+    from loguru import logger
+except ImportError:
+    import logging as logger
+    print("Warning: loguru not available, using standard logging")
 
 from ..core.static_analyzer.analyzer import StaticAnalyzer
 from ..core.string_extractor.extractor import StringExtractor
 from ..core.hash_patterns.matcher import HashPatternMatcher
 from ..core.reports.generator import ReportGenerator
+
+# Rich theme for better colors
+custom_theme = Theme({
+    "info": "cyan",
+    "warning": "yellow",
+    "error": "bold red",
+    "success": "bold green",
+    "header": "bold blue",
+    "command": "bold white",
+    "option": "italic cyan"
+})
+
+# Global console instance
+console = Console(theme=custom_theme)
 
 
 def setup_logging(verbose: bool = False, quiet: bool = False, log_file: Optional[Path] = None) -> None:
@@ -20,27 +46,27 @@ def setup_logging(verbose: bool = False, quiet: bool = False, log_file: Optional
     # Remove default logger
     logger.remove()
     
-    # Console logging
+    # Console logging with Rich integration
     if quiet:
         # No console output
         pass
     elif verbose:
-        # Verbose logging
-        logger.add(sys.stderr, level="DEBUG", format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>")
+        # Verbose logging with Rich colors
+        logger.add(sys.stderr, level="DEBUG", format="<level>{level: <8}</level> | <level>{message}</level>")
     else:
-        # Normal logging
-        logger.add(sys.stderr, level="INFO", format="<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>")
+        # Normal logging with Rich colors
+        logger.add(sys.stderr, level="INFO", format="<level>{level: <8}</level> | <level>{message}</level>")
     
     # File logging
     if log_file:
-        logger.add(log_file, level="DEBUG", format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}", rotation="10 MB", retention="5 days")
+        logger.add(log_file, level="DEBUG", format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {message}", rotation="10 MB", retention="5 days")
 
 
 def create_parser() -> argparse.ArgumentParser:
-    """Create command line argument parser"""
+    """Create command line argument parser with Rich styling"""
     parser = argparse.ArgumentParser(
         prog="reversibleai",
-        description="ReversibleAI - Advanced Static & Dynamic Analysis Framework",
+        description=Text("🔍 ReversibleAI - Advanced Static & Dynamic Analysis Framework", style="bold blue"),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -51,152 +77,261 @@ Examples:
         """
     )
     
-    # Global options
-    parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
-    parser.add_argument("-q", "--quiet", action="store_true", help="Suppress console output")
-    parser.add_argument("--log-file", type=Path, help="Log to specified file")
+    # Global options with better help text
+    parser.add_argument("-v", "--verbose", action="store_true", 
+                       help="Enable verbose output with detailed information")
+    parser.add_argument("-q", "--quiet", action="store_true", 
+                       help="Suppress console output (silent mode)")
+    parser.add_argument("--log-file", type=Path, 
+                       help="Log to specified file")
     parser.add_argument("--version", action="version", version="ReversibleAI 0.1.0")
     
     # Subcommands
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
     
     # Analyze command
-    analyze_parser = subparsers.add_parser("analyze", help="Analyze binary file")
+    analyze_parser = subparsers.add_parser("analyze", help="🔬 Analyze binary file")
     analyze_parser.add_argument("file", type=Path, help="Binary file to analyze")
-    analyze_parser.add_argument("-o", "--output", type=Path, required=True, help="Output report file")
-    analyze_parser.add_argument("-f", "--format", choices=["json", "html", "pdf", "xml"], default="html", help="Report format")
-    analyze_parser.add_argument("--no-functions", action="store_true", help="Skip function analysis")
-    analyze_parser.add_argument("--no-strings", action="store_true", help="Skip string extraction")
-    analyze_parser.add_argument("--no-control-flow", action="store_true", help="Skip control flow analysis")
-    analyze_parser.add_argument("--no-data-flow", action="store_true", help="Skip data flow analysis")
-    analyze_parser.add_argument("--min-string-length", type=int, default=4, help="Minimum string length")
-    analyze_parser.add_argument("--signatures", type=Path, help="Signature database file")
+    analyze_parser.add_argument("-o", "--output", type=Path, required=True, 
+                           help="📄 Output report file")
+    analyze_parser.add_argument("-f", "--format", choices=["json", "html", "pdf", "xml"], 
+                           default="html", help="📊 Report format")
+    analyze_parser.add_argument("--no-functions", action="store_true", 
+                           help="⏭️ Skip function analysis")
+    analyze_parser.add_argument("--no-strings", action="store_true", 
+                           help="📝 Skip string extraction")
+    analyze_parser.add_argument("--no-control-flow", action="store_true", 
+                           help="🔀 Skip control flow analysis")
+    analyze_parser.add_argument("--no-data-flow", action="store_true", 
+                           help="💾 Skip data flow analysis")
+    analyze_parser.add_argument("--min-string-length", type=int, default=4, 
+                           help="📏 Minimum string length")
+    analyze_parser.add_argument("--signatures", type=Path, 
+                           help="🔍 Signature database file")
     
     # Strings command
-    strings_parser = subparsers.add_parser("strings", help="Extract strings from binary")
+    strings_parser = subparsers.add_parser("strings", help="📝 Extract strings from binary")
     strings_parser.add_argument("file", type=Path, help="Binary file to analyze")
-    strings_parser.add_argument("-o", "--output", type=Path, help="Output file (default: stdout)")
-    strings_parser.add_argument("-f", "--format", choices=["text", "json", "csv"], default="text", help="Output format")
-    strings_parser.add_argument("--min-length", type=int, default=4, help="Minimum string length")
-    strings_parser.add_argument("--encoding", choices=["ascii", "utf8", "utf16", "all"], default="all", help="String encoding")
-    strings_parser.add_argument("--suspicious", action="store_true", help="Only show suspicious strings")
+    strings_parser.add_argument("-o", "--output", type=Path, 
+                           help="📄 Output file (default: stdout)")
+    strings_parser.add_argument("-f", "--format", choices=["text", "json", "csv"], 
+                           default="text", help="📊 Output format")
+    strings_parser.add_argument("--min-length", type=int, default=4, 
+                           help="📏 Minimum string length")
+    strings_parser.add_argument("--encoding", choices=["ascii", "utf8", "utf16", "all"], 
+                           default="all", help="🔤 String encoding")
+    strings_parser.add_argument("--suspicious", action="store_true", 
+                           help="⚠️ Only show suspicious strings")
     
     # Hash scan command
-    hash_parser = subparsers.add_parser("hash-scan", help="Scan with hash patterns")
+    hash_parser = subparsers.add_parser("hash-scan", help="🔍 Scan with hash patterns")
     hash_parser.add_argument("file", type=Path, help="Binary file to scan")
-    hash_parser.add_argument("-s", "--signatures", type=Path, required=True, help="Signature database file")
-    hash_parser.add_argument("-o", "--output", type=Path, help="Output file (default: stdout)")
-    hash_parser.add_argument("-f", "--format", choices=["text", "json"], default="text", help="Output format")
+    hash_parser.add_argument("-s", "--signatures", type=Path, required=True, 
+                         help="🗂️ Signature database file")
+    hash_parser.add_argument("-o", "--output", type=Path, 
+                         help="📄 Output file (default: stdout)")
+    hash_parser.add_argument("-f", "--format", choices=["text", "json"], 
+                         default="text", help="📊 Output format")
     
     # Info command
-    info_parser = subparsers.add_parser("info", help="Show binary information")
+    info_parser = subparsers.add_parser("info", help="ℹ️ Show binary information")
     info_parser.add_argument("file", type=Path, help="Binary file to analyze")
-    info_parser.add_argument("-f", "--format", choices=["text", "json"], default="text", help="Output format")
+    info_parser.add_argument("-f", "--format", choices=["text", "json"], 
+                        default="text", help="📊 Output format")
     
     return parser
 
 
 def cmd_analyze(args) -> int:
-    """Handle analyze command"""
+    """Handle analyze command with Rich progress and styling"""
     try:
         if not args.file.exists():
-            logger.error(f"File not found: {args.file}")
+            console.print(f"[error]❌ File not found: {args.file}[/error]")
             return 1
         
-        logger.info(f"Starting analysis of {args.file}")
+        # Show header
+        console.print(Panel(
+            f"[bold blue]🔬 ReversibleAI Analysis[/bold blue]\n"
+            f"Analyzing: [cyan]{args.file}[/cyan]",
+            title="Analysis Started",
+            border_style="blue"
+        ))
         
-        # Initialize analyzer
-        analyzer = StaticAnalyzer(args.file)
-        
-        # Perform analysis
-        result = analyzer.analyze(
-            analyze_functions=not args.no_functions,
-            analyze_strings=not args.no_strings,
-            analyze_control_flow=not args.no_control_flow,
-            analyze_data_flow=not args.no_data_flow,
-            min_string_length=args.min_string_length
-        )
+        # Initialize analyzer with progress
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console
+        ) as progress:
+            task = progress.add_task("Initializing analyzer...", total=None)
+            
+            analyzer = StaticAnalyzer(args.file)
+            progress.update(task, description="Analyzer initialized")
+            
+            # Perform analysis with progress
+            progress.update(task, description="Starting analysis...")
+            start_time = time.time()
+            
+            result = analyzer.analyze(
+                analyze_functions=not args.no_functions,
+                analyze_strings=not args.no_strings,
+                analyze_control_flow=not args.no_control_flow,
+                analyze_data_flow=not args.no_data_flow,
+                min_string_length=args.min_string_length
+            )
+            
+            end_time = time.time()
+            progress.update(task, description="Analysis completed!")
+            
+            # Show results summary
+            console.print("\n")
+            console.print("[bold green]✅ Analysis Complete![/bold green]")
+            console.print(f"[info]⏱️ Time taken: {end_time - start_time:.2f} seconds[/info]")
+            console.print(f"[info]🔍 Functions found: {len(result.functions)}[/info]")
+            console.print(f"[info]📝 Strings found: {len(result.strings)}[/info]")
+            console.print(f"[info]🔀 Imports: {len(result.imports)}[/info]")
+            console.print(f"[info]📤 Exports: {len(result.exports)}[/info]")
         
         # Add hash pattern matching if signatures provided
         if args.signatures:
-            logger.info("Performing hash pattern matching")
-            hash_matcher = HashPatternMatcher(args.signatures)
-            
-            # Match file hashes
-            file_matches = hash_matcher.match_file_hashes(args.file)
-            
-            # Match function hashes
-            function_matches = hash_matcher.match_function_hashes(result.functions)
-            
-            # Match string hashes
-            string_matches = hash_matcher.match_string_hashes(result.strings)
-            
-            # Add hash matches to result
-            result.hash_matches = {
-                'file_matches': [match.__dict__ for match in file_matches],
-                'function_matches': [match.__dict__ for match in function_matches],
-                'string_matches': [match.__dict__ for match in string_matches]
-            }
+            console.print(f"\n[info]🔍 Performing hash pattern matching...[/info]")
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console
+            ) as progress:
+                task = progress.add_task("Loading signatures...", total=None)
+                
+                hash_matcher = HashPatternMatcher(args.signatures)
+                progress.update(task, description="Signatures loaded")
+                
+                # Match file hashes
+                progress.update(task, description="Matching file hashes...")
+                file_matches = hash_matcher.match_file_hashes(args.file)
+                
+                # Match function hashes
+                progress.update(task, description="Matching function hashes...")
+                function_matches = hash_matcher.match_function_hashes(result.functions)
+                
+                # Match string hashes
+                progress.update(task, description="Matching string hashes...")
+                string_matches = hash_matcher.match_string_hashes(result.strings)
+                
+                progress.update(task, description="Hash matching completed!")
+                
+                # Add hash matches to result
+                result.hash_matches = {
+                    'file_matches': [match.__dict__ for match in file_matches],
+                    'function_matches': [match.__dict__ for match in function_matches],
+                    'string_matches': [match.__dict__ for match in string_matches]
+                }
+                
+                # Show hash match summary
+                total_matches = len(file_matches) + len(function_matches) + len(string_matches)
+                if total_matches > 0:
+                    console.print(f"[warning]⚠️ Hash matches found: {total_matches}[/warning]")
+                else:
+                    console.print(f"[success]✅ No hash matches found[/success]")
         
-        # Generate report
-        report_generator = ReportGenerator()
-        report_generator.set_metadata('file_path', str(args.file))
-        report_generator.set_metadata('analysis_options', {
-            'functions': not args.no_functions,
-            'strings': not args.no_strings,
-            'control_flow': not args.no_control_flow,
-            'data_flow': not args.no_data_flow,
-            'min_string_length': args.min_string_length
-        })
-        
-        success = report_generator.generate_analysis_report(
-            analysis_result=result.__dict__,
-            output_path=args.output,
-            format=args.format
-        )
+        # Generate report with progress
+        console.print(f"\n[info]📄 Generating report: {args.output}[/info]")
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console
+        ) as progress:
+            task = progress.add_task("Generating report...", total=None)
+            
+            report_generator = ReportGenerator()
+            report_generator.set_metadata('file_path', str(args.file))
+            report_generator.set_metadata('analysis_options', {
+                'functions': not args.no_functions,
+                'strings': not args.no_strings,
+                'control_flow': not args.no_control_flow,
+                'data_flow': not args.no_data_flow,
+                'min_string_length': args.min_string_length
+            })
+            
+            success = report_generator.generate_analysis_report(
+                analysis_result=result.__dict__,
+                output_path=args.output,
+                format=args.format
+            )
+            
+            progress.update(task, description="Report generated!")
         
         if success:
-            logger.info(f"Analysis complete. Report saved to {args.output}")
+            console.print(f"\n[bold green]✅ Analysis complete! Report saved to: {args.output}[/bold green]")
             return 0
         else:
-            logger.error("Failed to generate report")
+            console.print(f"\n[error]❌ Failed to generate report[/error]")
             return 1
             
     except Exception as e:
-        logger.error(f"Analysis failed: {e}")
+        console.print(f"[error]❌ Analysis failed: {e}[/error]")
         return 1
+    finally:
+        pass
 
 
 def cmd_strings(args) -> int:
-    """Handle strings command"""
+    """Handle strings command with Rich styling"""
     try:
         if not args.file.exists():
-            logger.error(f"File not found: {args.file}")
+            console.print(f"[error]❌ File not found: {args.file}[/error]")
             return 1
         
-        logger.info(f"Extracting strings from {args.file}")
-        
-        # Initialize string extractor
-        extractor = StringExtractor(args.file)
-        
-        # Determine encodings
-        encodings = None
-        if args.encoding != "all":
-            encodings = [args.encoding]
-        
-        # Extract strings
-        strings = extractor.extract_strings(
-            min_length=args.min_length,
-            encodings=encodings,
-            include_unicode=True
+        # Show header
+        console.print(Panel(
+            f"[bold blue]📝 String Extraction[/bold blue]\n"
+            f"Extracting from: [cyan]{args.file}[/cyan]",
+            title="String Extraction Started",
+            border_style="blue"
         )
         
-        # Filter suspicious strings if requested
-        if args.suspicious:
-            strings = extractor.find_suspicious_strings()
+        # Initialize string extractor with progress
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console
+        ) as progress:
+            task = progress.add_task("Initializing extractor...", total=None)
+            
+            extractor = StringExtractor(args.file)
+            progress.update(task, description="Extractor initialized")
+            
+            # Determine encodings
+            encodings = None
+            if args.encoding != "all":
+                encodings = [args.encoding]
+            
+            # Extract strings with progress
+            progress.update(task, description="Extracting strings...")
+            strings = extractor.extract_strings(
+                min_length=args.min_length,
+                encodings=encodings,
+                include_unicode=True
+            )
+            
+            progress.update(task, description="String extraction completed!")
+            
+            # Filter suspicious strings if requested
+            if args.suspicious:
+                progress.update(task, description="Filtering suspicious strings...")
+                strings = extractor.find_suspicious_strings()
+                progress.update(task, description="Filtering completed!")
+            
+            # Show results summary
+            console.print("\n")
+            console.print("[bold green]✅ String extraction complete![/bold green]")
+            console.print(f"[info]📝 Total strings: {len(strings)}[/info]")
+            
+            if args.suspicious:
+                console.print(f"[warning]⚠️ Suspicious strings: {len(strings)}[/warning]")
         
         # Output results
         if args.output:
+            console.print(f"\n[info]📄 Saving to: {args.output}[/info]")
             with open(args.output, 'w', encoding='utf-8') as f:
                 if args.format == "json":
                     import json
@@ -213,22 +348,32 @@ def cmd_strings(args) -> int:
         else:
             if args.format == "json":
                 import json
-                print(json.dumps([s.__dict__ for s in strings], indent=2))
+                console.print(json.dumps([s.__dict__ for s in strings], indent=2))
             elif args.format == "csv":
                 import csv
-                writer = csv.writer(sys.stdout)
-                writer.writerow(['value', 'address', 'encoding', 'length', 'entropy'])
+                from rich.console import Console
+                from rich.table import Table
+                
+                table = Table(title="Extracted Strings")
+                table.add_column("Value", style="cyan")
+                table.add_column("Address", style="magenta")
+                table.add_column("Encoding", style="green")
+                table.add_column("Length", style="blue")
+                table.add_column("Entropy", style="yellow")
+                
                 for s in strings:
-                    writer.writerow([s.value, s.address, s.encoding, s.length, s.entropy])
+                    table.add_row(s.value, s.address, s.encoding, s.length, f"{s.entropy:.2f}")
+                
+                console.print(table)
             else:
                 for s in strings:
-                    print(s.value)
+                    console.print(f"[info]{s.value}[/info]")
         
-        logger.info(f"Extracted {len(strings)} strings")
+        console.print(f"\n[success]✅ String extraction completed![/success]")
         return 0
         
     except Exception as e:
-        logger.error(f"String extraction failed: {e}")
+        console.print(f"[error]❌ String extraction failed: {e}[/error]")
         return 1
 
 
@@ -344,14 +489,14 @@ def cmd_info(args) -> int:
 
 
 def main() -> int:
-    """Main entry point"""
+    """Main entry point with Rich styling"""
     parser = create_parser()
     args = parser.parse_args()
     
     # Setup logging
     setup_logging(args.verbose, args.quiet, args.log_file)
     
-    # Handle commands
+    # Handle commands with Rich styling
     if args.command == "analyze":
         return cmd_analyze(args)
     elif args.command == "strings":
@@ -361,7 +506,18 @@ def main() -> int:
     elif args.command == "info":
         return cmd_info(args)
     else:
-        parser.print_help()
+        # Show help with Rich styling
+        console.print(Panel(
+            "[bold blue]🔍 ReversibleAI - Advanced Static & Dynamic Analysis Framework[/bold blue]\n\n"
+            "[command]Available commands:[/command]\n"
+            "  [info]analyze[/info]     - Analyze binary file\n"
+            "  [info]strings[/info]     - Extract strings from binary\n"
+            "  [info]hash-scan[/info]  - Scan with hash patterns\n"
+            "  [info]info[/info]        - Show binary information\n\n"
+            "[dim]Use --help for more information about a command.[/dim]",
+            title="ReversibleAI",
+            border_style="blue"
+        )
         return 1
 
 

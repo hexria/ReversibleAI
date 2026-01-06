@@ -1,18 +1,24 @@
 """
-Annotation manager for functions and API information
+Annotation manager for functions and code
 """
 
-from typing import Dict, List, Any, Optional, Set
 from pathlib import Path
-from dataclasses import dataclass
+from typing import Dict, List, Any, Optional
 import json
+import sqlite3
+from datetime import datetime
 
 from loguru import logger
 
-from .database import AnnotationDatabase
-from .api_info import APIInfo
+try:
+    from .database import AnnotationDatabase
+    from .api_info import APIInfo
+except ImportError:
+    # Handle import errors gracefully
+    AnnotationDatabase = None
+    APIInfo = None
 
-
+# Define classes locally if imports fail
 @dataclass
 class FunctionAnnotation:
     """Represents a function annotation"""
@@ -27,7 +33,6 @@ class FunctionAnnotation:
     source: str  # "manual", "automatic", "imported"
     metadata: Dict[str, Any]
 
-
 @dataclass
 class CommentAnnotation:
     """Represents a comment annotation"""
@@ -37,6 +42,7 @@ class CommentAnnotation:
     timestamp: str
     type: str  # "inline", "function", "basic_block"
     metadata: Dict[str, Any]
+from .manager import FunctionAnnotation, CommentAnnotation
 
 
 class AnnotationManager:
@@ -44,11 +50,12 @@ class AnnotationManager:
     
     def __init__(self, db_path: Optional[Path] = None) -> None:
         self.db_path = db_path or Path("annotations.db")
-        self.database = AnnotationDatabase(self.db_path)
-        self.api_info = APIInfo()
+        self.database = AnnotationDatabase(self.db_path) if AnnotationDatabase else None
+        self.api_info = APIInfo() if APIInfo else None
         
         # Load existing annotations
-        self.database.load_annotations()
+        if self.database:
+            self.database.load_annotations()
     
     def add_function_annotation(self, annotation: FunctionAnnotation) -> bool:
         """Add a function annotation"""
