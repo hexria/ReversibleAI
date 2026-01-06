@@ -1,0 +1,24 @@
+# ReversibleAI Default Configuration
+# This file can be copied to ~/.reversibleai/config.yaml and customized
+
+logging:
+  level: INFO
+  file: ~/.reversibleai/logs/reversibleai.log
+  format: text  # text or json
+  rotation: 10 MB
+  retention: 7 days
+  enable_console: true
+  enable_file: true
+
+analysis:
+  default_timeout: 300  # seconds
+  max_memory: 2048  # MB
+  enable_emulation: true
+  max_string_length: 10000
+  min_string_length: 4
+
+plugins:
+  auto_load: true
+  search_paths:
+    - ~/.reversibleai/plugins
+    - /usr/local/lib/reversibleai/plugins

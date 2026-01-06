@@ -4,6 +4,7 @@ Annotation manager for functions and code
 
 from pathlib import Path
 from typing import Dict, List, Any, Optional
+from dataclasses import dataclass
 import json
 import sqlite3
 from datetime import datetime
@@ -410,25 +411,12 @@ class AnnotationManager:
                 elif any(api in operands for api in ['socket', 'connect', 'send', 'recv']):
                     api_calls.append('networking')
         
+        # Add API call suggestions if found
+        if api_calls:
             suggestions.append({
-                'type': 'api_match',
-                'confidence': api_info.get('confidence', 0.5),
-                'annotation': api_info
+                'type': 'api_pattern',
+                'confidence': 0.7,
+                'annotation': {'api_calls': api_calls}
             })
-        
-    # Check for instruction patterns
-    api_calls = []
-    for insn in instructions:
-        mnemonic = insn.get('mnemonic', '').lower()
-        operands = insn.get('operands', '').lower()
-            
-        if mnemonic == 'call':
-            if any(api in operands for api in ['createfile', 'readfile', 'writefile']):
-                api_calls.append('file_operations')
-            elif any(api in operands for api in ['createmutex', 'waitforsingleobject']):
-                api_calls.append('synchronization')
-            elif any(api in operands for api in ['socket', 'connect', 'send', 'recv']):
-                api_calls.append('networking')
-            return True
         
         return suggestions

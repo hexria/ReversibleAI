@@ -11,7 +11,6 @@ sys.path.insert(0, str(project_root))
 
 from .unit import *
 from .integration import *
-from .fixtures import *
 
 __all__ = [
     "TestLoader",

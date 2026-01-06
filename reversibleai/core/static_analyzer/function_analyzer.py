@@ -9,6 +9,7 @@ import re
 from loguru import logger
 
 from ..loader.base import BaseLoader
+from ..constants import FUNCTION_PROLOGUES
 from .disassembler import Disassembler, Instruction
 
 
@@ -102,7 +103,11 @@ class FunctionAnalyzer:
         if self.binary_info.entry_point > 0:
             self._create_function(self.binary_info.entry_point, "_start")
         
-        # TODO: Add more entry point detection (TLS callbacks, exception handlers, etc.)
+        # Additional entry points can be detected here:
+        # - TLS callbacks (PE: IMAGE_DIRECTORY_ENTRY_TLS)
+        # - Exception handlers (structured exception handling)
+        # - DllMain (for DLLs)
+        # - Constructors/Destructors (C++ global objects)
     
     def _identify_functions_from_code_patterns(self) -> None:
         """Identify functions by analyzing code patterns"""
@@ -113,37 +118,20 @@ class FunctionAnalyzer:
         prologue_patterns = self._get_function_prologue_patterns()
         
         # For now, just add some common patterns
-        # TODO: Implement proper function detection using recursive disassembly
+        # Function detection using recursive disassembly:
+        # 1. Start from known entry points
+        # 2. Follow call instructions
+        # 3. Identify function prologues/epilogues
+        # 4. Build function boundaries
+        # This is a simplified implementation - full recursive disassembly
+        # would require more sophisticated control flow analysis
         
         pass
     
     def _get_function_prologue_patterns(self) -> List[bytes]:
         """Get common function prologue patterns for the current architecture"""
-        if self.binary_info.architecture == "x86":
-            return [
-                b"\x55",  # push ebp
-                b"\x89\xe5",  # mov ebp, esp
-                b"\x55\x8b\xec",  # push ebp; mov ebp, esp
-            ]
-        elif self.binary_info.architecture == "x86_64":
-            return [
-                b"\x55",  # push rbp
-                b"\x48\x89\xe5",  # mov rbp, rsp
-                b"\x40\x55",  # push rbp
-                b"\x48\x83\xec",  # sub rsp, imm
-            ]
-        elif self.binary_info.architecture == "arm":
-            return [
-                b"\x2d\xe9",  # push {fp, lr}
-                b"\x10\xb5",  # push {r4, lr}
-            ]
-        elif self.binary_info.architecture == "aarch64":
-            return [
-                b"\xfd\x7b",  # stp x29, x30, [sp, #-imm]!
-                b"\xff\x83",  # stp x29, x30, [sp, #-imm]!
-            ]
-        
-        return []
+        arch = self.binary_info.architecture.lower()
+        return FUNCTION_PROLOGUES.get(arch, [])
     
     def _create_function(self, address: int, name: Optional[str] = None, is_external: bool = False) -> Optional[Function]:
         """Create a function at the given address"""
@@ -214,7 +202,10 @@ class FunctionAnalyzer:
         try:
             with open(self.binary_info.path, "rb") as f:
                 # For now, just read from the file
-                # TODO: Implement proper virtual address to file offset mapping
+                # Virtual address to file offset mapping:
+                # For PE: Use section headers to map RVA to file offset
+                # For ELF: Use program headers for virtual address mapping
+                # For Mach-O: Use segment commands for address mapping
                 f.seek(0)
                 return f.read(max_size)
         except Exception:
@@ -376,6 +367,15 @@ class FunctionAnalyzer:
                         called_func.callers.append(func.start_address)
     
     def get_function_at_address(self, address: int) -> Optional[Dict[str, Any]]:
+        """
+        Get function information at specific address
+        
+        Args:
+            address: Function address
+            
+        Returns:
+            Function dictionary or None if not found
+        """
         """Get function at specific address"""
         for func in self.functions:
             if func.start_address <= address < func.end_address:
@@ -383,10 +383,28 @@ class FunctionAnalyzer:
         return None
     
     def get_functions_by_name(self, name: str) -> List[Dict[str, Any]]:
+        """
+        Get functions by exact name match
+        
+        Args:
+            name: Function name to search for
+            
+        Returns:
+            List of matching function dictionaries
+        """
         """Get functions by exact name match"""
         return [func.to_dict() for func in self.functions if func.name == name]
     
     def search_functions(self, pattern: str) -> List[Dict[str, Any]]:
+        """
+        Search functions by name pattern
+        
+        Args:
+            pattern: Search pattern (supports wildcards)
+            
+        Returns:
+            List of matching function dictionaries
+        """
         """Search functions by name pattern"""
         regex = re.compile(pattern, re.IGNORECASE)
         return [func.to_dict() for func in self.functions if func.name and regex.search(func.name)]

@@ -25,6 +25,23 @@ from ..core.static_analyzer.analyzer import StaticAnalyzer
 from ..core.string_extractor.extractor import StringExtractor
 from ..core.hash_patterns.matcher import HashPatternMatcher
 from ..core.reports.generator import ReportGenerator
+from ..core.exceptions import (
+    ReversibleAIError,
+    AnalysisError,
+    LoaderError,
+    ReportError,
+    ValidationError
+)
+from ..core.validation import validate_path
+from .plugin_commands import (
+    cmd_plugin_list,
+    cmd_plugin_info,
+    cmd_plugin_enable,
+    cmd_plugin_disable,
+    cmd_plugin_load,
+    cmd_plugin_unload
+)
+from .interactive import run_interactive
 
 # Rich theme for better colors
 custom_theme = Theme({
@@ -89,6 +106,10 @@ Examples:
     # Subcommands
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
     
+    # Interactive mode
+    interactive_parser = subparsers.add_parser("interactive", help="🖥️ Start interactive shell")
+    interactive_parser.add_argument("--no-intro", action="store_true", help="Skip intro message")
+    
     # Analyze command
     analyze_parser = subparsers.add_parser("analyze", help="🔬 Analyze binary file")
     analyze_parser.add_argument("file", type=Path, help="Binary file to analyze")
@@ -116,7 +137,7 @@ Examples:
                            help="📄 Output file (default: stdout)")
     strings_parser.add_argument("-f", "--format", choices=["text", "json", "csv"], 
                            default="text", help="📊 Output format")
-    strings_parser.add_argument("--min-length", type=int, default=4, 
+    strings_parser.add_argument("--min-length", type=int, default=4,  # Will use config default 
                            help="📏 Minimum string length")
     strings_parser.add_argument("--encoding", choices=["ascii", "utf8", "utf16", "all"], 
                            default="all", help="🔤 String encoding")
@@ -139,20 +160,59 @@ Examples:
     info_parser.add_argument("-f", "--format", choices=["text", "json"], 
                         default="text", help="📊 Output format")
     
+    # Plugin commands
+    plugin_parser = subparsers.add_parser("plugin", help="🔌 Plugin management")
+    plugin_subparsers = plugin_parser.add_subparsers(dest="plugin_command", help="Plugin commands")
+    
+    # Plugin list
+    plugin_list_parser = plugin_subparsers.add_parser("list", help="📋 List available plugins")
+    plugin_list_parser.add_argument("-f", "--format", choices=["text", "json"], 
+                                   default="text", help="📊 Output format")
+    
+    # Plugin info
+    plugin_info_parser = plugin_subparsers.add_parser("info", help="ℹ️ Show plugin information")
+    plugin_info_parser.add_argument("plugin_name", help="Plugin name")
+    plugin_info_parser.add_argument("-f", "--format", choices=["text", "json"], 
+                                   default="text", help="📊 Output format")
+    
+    # Plugin enable
+    plugin_enable_parser = plugin_subparsers.add_parser("enable", help="✅ Enable a plugin")
+    plugin_enable_parser.add_argument("plugin_name", help="Plugin name")
+    
+    # Plugin disable
+    plugin_disable_parser = plugin_subparsers.add_parser("disable", help="❌ Disable a plugin")
+    plugin_disable_parser.add_argument("plugin_name", help="Plugin name")
+    
+    # Plugin load
+    plugin_load_parser = plugin_subparsers.add_parser("load", help="📥 Load a plugin")
+    plugin_load_parser.add_argument("plugin_name", help="Plugin name")
+    plugin_load_parser.add_argument("-c", "--config", type=Path, help="Plugin configuration file")
+    
+    # Plugin unload
+    plugin_unload_parser = plugin_subparsers.add_parser("unload", help="📤 Unload a plugin")
+    plugin_unload_parser.add_argument("plugin_name", help="Plugin name")
+    
     return parser
 
 
 def cmd_analyze(args) -> int:
     """Handle analyze command with Rich progress and styling"""
     try:
-        if not args.file.exists():
-            console.print(f"[error]❌ File not found: {args.file}[/error]")
+        # Validate file path
+        try:
+            file_path = validate_path(args.file)
+        except (ValidationError, LoaderError) as e:
+            console.print(f"[error]❌ {e}[/error]")
+            return 1
+        
+        if not file_path.exists():
+            console.print(f"[error]❌ File not found: {file_path}[/error]")
             return 1
         
         # Show header
         console.print(Panel(
             f"[bold blue]🔬 ReversibleAI Analysis[/bold blue]\n"
-            f"Analyzing: [cyan]{args.file}[/cyan]",
+            f"Analyzing: [cyan]{file_path}[/cyan]",
             title="Analysis Started",
             border_style="blue"
         ))
@@ -165,7 +225,7 @@ def cmd_analyze(args) -> int:
         ) as progress:
             task = progress.add_task("Initializing analyzer...", total=None)
             
-            analyzer = StaticAnalyzer(args.file)
+            analyzer = StaticAnalyzer(file_path)
             progress.update(task, description="Analyzer initialized")
             
             # Perform analysis with progress
@@ -207,7 +267,7 @@ def cmd_analyze(args) -> int:
                 
                 # Match file hashes
                 progress.update(task, description="Matching file hashes...")
-                file_matches = hash_matcher.match_file_hashes(args.file)
+                file_matches = hash_matcher.match_file_hashes(file_path)
                 
                 # Match function hashes
                 progress.update(task, description="Matching function hashes...")
@@ -243,7 +303,7 @@ def cmd_analyze(args) -> int:
             task = progress.add_task("Generating report...", total=None)
             
             report_generator = ReportGenerator()
-            report_generator.set_metadata('file_path', str(args.file))
+            report_generator.set_metadata('file_path', str(file_path))
             report_generator.set_metadata('analysis_options', {
                 'functions': not args.no_functions,
                 'strings': not args.no_strings,
@@ -267,8 +327,24 @@ def cmd_analyze(args) -> int:
             console.print(f"\n[error]❌ Failed to generate report[/error]")
             return 1
             
+    except LoaderError as e:
+        console.print(f"[error]❌ Loader error: {e}[/error]")
+        return 1
+    except AnalysisError as e:
+        console.print(f"[error]❌ Analysis error: {e}[/error]")
+        return 1
+    except ReportError as e:
+        console.print(f"[error]❌ Report generation error: {e}[/error]")
+        return 1
+    except ValidationError as e:
+        console.print(f"[error]❌ Validation error: {e}[/error]")
+        return 1
+    except ReversibleAIError as e:
+        console.print(f"[error]❌ Error: {e}[/error]")
+        return 1
     except Exception as e:
-        console.print(f"[error]❌ Analysis failed: {e}[/error]")
+        console.print(f"[error]❌ Unexpected error: {e}[/error]")
+        logger.exception("Unexpected error in analyze command")
         return 1
     finally:
         pass
@@ -277,17 +353,24 @@ def cmd_analyze(args) -> int:
 def cmd_strings(args) -> int:
     """Handle strings command with Rich styling"""
     try:
-        if not args.file.exists():
-            console.print(f"[error]❌ File not found: {args.file}[/error]")
+        # Validate file path
+        try:
+            file_path = validate_path(args.file)
+        except (ValidationError, LoaderError) as e:
+            console.print(f"[error]❌ {e}[/error]")
+            return 1
+        
+        if not file_path.exists():
+            console.print(f"[error]❌ File not found: {file_path}[/error]")
             return 1
         
         # Show header
         console.print(Panel(
             f"[bold blue]📝 String Extraction[/bold blue]\n"
-            f"Extracting from: [cyan]{args.file}[/cyan]",
+            f"Extracting from: [cyan]{file_path}[/cyan]",
             title="String Extraction Started",
             border_style="blue"
-        )
+        ))
         
         # Initialize string extractor with progress
         with Progress(
@@ -297,7 +380,7 @@ def cmd_strings(args) -> int:
         ) as progress:
             task = progress.add_task("Initializing extractor...", total=None)
             
-            extractor = StringExtractor(args.file)
+            extractor = StringExtractor(file_path)
             progress.update(task, description="Extractor initialized")
             
             # Determine encodings
@@ -372,8 +455,18 @@ def cmd_strings(args) -> int:
         console.print(f"\n[success]✅ String extraction completed![/success]")
         return 0
         
+    except LoaderError as e:
+        console.print(f"[error]❌ Loader error: {e}[/error]")
+        return 1
+    except ValidationError as e:
+        console.print(f"[error]❌ Validation error: {e}[/error]")
+        return 1
+    except ReversibleAIError as e:
+        console.print(f"[error]❌ Error: {e}[/error]")
+        return 1
     except Exception as e:
-        console.print(f"[error]❌ String extraction failed: {e}[/error]")
+        console.print(f"[error]❌ Unexpected error: {e}[/error]")
+        logger.exception("Unexpected error in strings command")
         return 1
 
 
@@ -445,8 +538,18 @@ def cmd_hash_scan(args) -> int:
         logger.info(f"Scan complete. Found {total_matches} matches")
         return 0
         
+    except LoaderError as e:
+        logger.error(f"Loader error: {e}")
+        return 1
+    except ValidationError as e:
+        logger.error(f"Validation error: {e}")
+        return 1
+    except ReversibleAIError as e:
+        logger.error(f"Error: {e}")
+        return 1
     except Exception as e:
-        logger.error(f"Hash scan failed: {e}")
+        logger.error(f"Unexpected error: {e}")
+        logger.exception("Unexpected error in hash-scan command")
         return 1
 
 
@@ -483,8 +586,18 @@ def cmd_info(args) -> int:
         
         return 0
         
+    except LoaderError as e:
+        logger.error(f"Loader error: {e}")
+        return 1
+    except ValidationError as e:
+        logger.error(f"Validation error: {e}")
+        return 1
+    except ReversibleAIError as e:
+        logger.error(f"Error: {e}")
+        return 1
     except Exception as e:
-        logger.error(f"Info command failed: {e}")
+        logger.error(f"Unexpected error: {e}")
+        logger.exception("Unexpected error in info command")
         return 1
 
 
@@ -505,6 +618,24 @@ def main() -> int:
         return cmd_hash_scan(args)
     elif args.command == "info":
         return cmd_info(args)
+    elif args.command == "plugin":
+        if args.plugin_command == "list":
+            return cmd_plugin_list(args)
+        elif args.plugin_command == "info":
+            return cmd_plugin_info(args)
+        elif args.plugin_command == "enable":
+            return cmd_plugin_enable(args)
+        elif args.plugin_command == "disable":
+            return cmd_plugin_disable(args)
+        elif args.plugin_command == "load":
+            return cmd_plugin_load(args)
+        elif args.plugin_command == "unload":
+            return cmd_plugin_unload(args)
+        else:
+            plugin_parser.print_help()
+            return 1
+    elif args.command == "interactive":
+        return run_interactive()
     else:
         # Show help with Rich styling
         console.print(Panel(
@@ -517,7 +648,7 @@ def main() -> int:
             "[dim]Use --help for more information about a command.[/dim]",
             title="ReversibleAI",
             border_style="blue"
-        )
+        ))
         return 1
 
 

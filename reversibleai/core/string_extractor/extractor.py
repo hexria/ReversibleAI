@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from collections import defaultdict
 
 from loguru import logger
+from ..utils.cache import cache_string
+from ..constants import SUSPICIOUS_KEYWORDS, DEFAULT_MIN_STRING_LENGTH
 
 
 @dataclass
@@ -49,7 +51,7 @@ class StringExtractor:
         self._file_data: Optional[bytes] = None
         
     def extract_strings(self, 
-                       min_length: int = 4,
+                       min_length: int = DEFAULT_MIN_STRING_LENGTH,
                        encodings: Optional[List[str]] = None,
                        include_unicode: bool = True,
                        calculate_entropy: bool = True) -> List[StringInfo]:
@@ -93,7 +95,7 @@ class StringExtractor:
         # Calculate entropy if requested
         if calculate_entropy:
             for string_info in self.strings:
-                string_info.entropy = self._calculate_string_entropy(string_info.value)
+                string_info.entropy = StringExtractor._calculate_string_entropy(string_info.value)
         
         # Remove duplicates
         self.strings = self._remove_duplicates(self.strings)
@@ -205,7 +207,8 @@ class StringExtractor:
         
         return strings
     
-    def _calculate_string_entropy(self, string_value: str) -> float:
+    @staticmethod
+    def _calculate_string_entropy(string_value: str) -> float:
         """Calculate Shannon entropy of a string"""
         if not string_value:
             return 0.0
@@ -254,13 +257,7 @@ class StringExtractor:
             List of suspicious StringInfo objects
         """
         if suspicious_keywords is None:
-            suspicious_keywords = [
-                'password', 'passwd', 'secret', 'key', 'crypto', 'encrypt',
-                'decrypt', 'shell', 'cmd', 'powershell', 'admin', 'root',
-                'http://', 'https://', 'ftp://', 'tcp://', 'udp://',
-                'createprocess', 'virtualalloc', 'writeprocessmemory',
-                'createremotethread', 'setwindowshookex'
-            ]
+            suspicious_keywords = SUSPICIOUS_KEYWORDS
         
         suspicious = []
         

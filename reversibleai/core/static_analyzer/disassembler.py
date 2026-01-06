@@ -6,6 +6,11 @@ from typing import List, Dict, Any, Optional, Tuple
 import capstone
 from loguru import logger
 
+from ..utils.cache import cache_result, LRUCache
+
+# Cache for disassembly results
+_disassembly_cache = LRUCache(maxsize=1024, ttl=3600)  # 1 hour TTL
+
 
 class Instruction:
     """Represents a single disassembled instruction"""
@@ -122,11 +127,24 @@ class Disassembler:
         if not self.cs:
             raise RuntimeError("Disassembler not initialized")
         
+        # Create cache key including architecture info
+        import hashlib
+        cache_key = f"{self.architecture}:{self.bits}:{self.endianness}:{hashlib.sha256(code).hexdigest()}:{base_address}"
+        
+        # Check cache
+        cached_result = _disassembly_cache.get(cache_key)
+        if cached_result is not None:
+            logger.debug(f"Cache hit for disassembly")
+            return cached_result
+        
         instructions = []
         
         try:
             for cs_insn in self.cs.disasm(code, base_address):
                 instructions.append(Instruction(cs_insn))
+            
+            # Cache result
+            _disassembly_cache.set(cache_key, instructions)
             
             logger.debug(f"Disassembled {len(instructions)} instructions")
             return instructions
