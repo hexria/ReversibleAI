@@ -1,0 +1,388 @@
+"""
+Annotation manager for functions and API information
+"""
+
+from typing import Dict, List, Any, Optional, Set
+from pathlib import Path
+from dataclasses import dataclass
+import json
+
+from loguru import logger
+
+from .database import AnnotationDatabase
+from .api_info import APIInfo
+
+
+@dataclass
+class FunctionAnnotation:
+    """Represents a function annotation"""
+    address: int
+    name: str
+    description: str
+    parameters: List[Dict[str, Any]]
+    return_value: Dict[str, Any]
+    calling_convention: str
+    tags: List[str]
+    confidence: float
+    source: str  # "manual", "automatic", "imported"
+    metadata: Dict[str, Any]
+
+
+@dataclass
+class CommentAnnotation:
+    """Represents a comment annotation"""
+    address: int
+    comment: str
+    author: str
+    timestamp: str
+    type: str  # "inline", "function", "basic_block"
+    metadata: Dict[str, Any]
+
+
+class AnnotationManager:
+    """Manages annotations for functions and code"""
+    
+    def __init__(self, db_path: Optional[Path] = None) -> None:
+        self.db_path = db_path or Path("annotations.db")
+        self.database = AnnotationDatabase(self.db_path)
+        self.api_info = APIInfo()
+        
+        # Load existing annotations
+        self.database.load_annotations()
+    
+    def add_function_annotation(self, annotation: FunctionAnnotation) -> bool:
+        """Add a function annotation"""
+        try:
+            success = self.database.add_function_annotation(annotation)
+            if success:
+                logger.info(f"Added function annotation: {annotation.name} at {hex(annotation.address)}")
+            return success
+        except Exception as e:
+            logger.error(f"Failed to add function annotation: {e}")
+            return False
+    
+    def get_function_annotation(self, address: int) -> Optional[FunctionAnnotation]:
+        """Get function annotation by address"""
+        return self.database.get_function_annotation(address)
+    
+    def get_function_annotations_by_name(self, name: str) -> List[FunctionAnnotation]:
+        """Get function annotations by name"""
+        return self.database.get_function_annotations_by_name(name)
+    
+    def search_function_annotations(self, query: str) -> List[FunctionAnnotation]:
+        """Search function annotations"""
+        return self.database.search_function_annotations(query)
+    
+    def update_function_annotation(self, annotation: FunctionAnnotation) -> bool:
+        """Update a function annotation"""
+        try:
+            success = self.database.update_function_annotation(annotation)
+            if success:
+                logger.info(f"Updated function annotation: {annotation.name}")
+            return success
+        except Exception as e:
+            logger.error(f"Failed to update function annotation: {e}")
+            return False
+    
+    def remove_function_annotation(self, address: int) -> bool:
+        """Remove a function annotation"""
+        try:
+            success = self.database.remove_function_annotation(address)
+            if success:
+                logger.info(f"Removed function annotation at {hex(address)}")
+            return success
+        except Exception as e:
+            logger.error(f"Failed to remove function annotation: {e}")
+            return False
+    
+    def add_comment(self, comment: CommentAnnotation) -> bool:
+        """Add a comment annotation"""
+        try:
+            success = self.database.add_comment(comment)
+            if success:
+                logger.debug(f"Added comment at {hex(comment.address)}")
+            return success
+        except Exception as e:
+            logger.error(f"Failed to add comment: {e}")
+            return False
+    
+    def get_comments(self, address: Optional[int] = None) -> List[CommentAnnotation]:
+        """Get comments, optionally filtered by address"""
+        return self.database.get_comments(address)
+    
+    def update_comment(self, comment: CommentAnnotation) -> bool:
+        """Update a comment"""
+        try:
+            success = self.database.update_comment(comment)
+            if success:
+                logger.debug(f"Updated comment at {hex(comment.address)}")
+            return success
+        except Exception as e:
+            logger.error(f"Failed to update comment: {e}")
+            return False
+    
+    def remove_comment(self, address: int, comment_id: str) -> bool:
+        """Remove a comment"""
+        try:
+            success = self.database.remove_comment(address, comment_id)
+            if success:
+                logger.debug(f"Removed comment at {hex(address)}")
+            return success
+        except Exception as e:
+            logger.error(f"Failed to remove comment: {e}")
+            return False
+    
+    def auto_annotate_functions(self, functions: List[Dict[str, Any]]) -> int:
+        """Automatically annotate functions based on patterns and API info"""
+        annotated_count = 0
+        
+        for func in functions:
+            address = func.get('start_address', 0)
+            name = func.get('name', '')
+            
+            # Skip if already annotated
+            if self.get_function_annotation(address):
+                continue
+            
+            # Try to get API information
+            api_info = self.api_info.get_function_info(name)
+            
+            if api_info:
+                annotation = FunctionAnnotation(
+                    address=address,
+                    name=name,
+                    description=api_info.get('description', ''),
+                    parameters=api_info.get('parameters', []),
+                    return_value=api_info.get('return_value', {}),
+                    calling_convention=api_info.get('calling_convention', 'unknown'),
+                    tags=api_info.get('tags', []),
+                    confidence=api_info.get('confidence', 0.5),
+                    source='automatic',
+                    metadata={'api_source': api_info.get('source', 'unknown')}
+                )
+                
+                if self.add_function_annotation(annotation):
+                    annotated_count += 1
+            
+            # Try pattern-based annotation
+            elif self._should_annotate_by_pattern(func):
+                annotation = self._create_pattern_annotation(func)
+                if annotation and self.add_function_annotation(annotation):
+                    annotated_count += 1
+        
+        logger.info(f"Auto-annotated {annotated_count} functions")
+        return annotated_count
+    
+    def _should_annotate_by_pattern(self, func: Dict[str, Any]) -> bool:
+        """Check if function should be annotated based on patterns"""
+        name = func.get('name', '').lower()
+        instructions = func.get('instructions', [])
+        
+        # Check for common patterns
+        if any(pattern in name for pattern in ['main', 'start', 'entry', 'dllmain']):
+            return True
+        
+        # Check for API call patterns
+        for insn in instructions:
+            mnemonic = insn.get('mnemonic', '').lower()
+            operands = insn.get('operands', '').lower()
+            
+            if mnemonic == 'call':
+                if any(api in operands for api in ['createfile', 'readfile', 'writefile', 'closehandle']):
+                    return True
+        
+        return False
+    
+    def _create_pattern_annotation(self, func: Dict[str, Any]) -> Optional[FunctionAnnotation]:
+        """Create annotation based on function patterns"""
+        name = func.get('name', '')
+        address = func.get('start_address', 0)
+        
+        if 'main' in name.lower():
+            return FunctionAnnotation(
+                address=address,
+                name=name,
+                description="Main entry point function",
+                parameters=[],
+                return_value={'type': 'int', 'description': 'Exit code'},
+                calling_convention='cdecl',
+                tags=['entry_point', 'main'],
+                confidence=0.8,
+                source='automatic',
+                metadata={'pattern': 'main_function'}
+            )
+        
+        elif 'dllmain' in name.lower():
+            return FunctionAnnotation(
+                address=address,
+                name=name,
+                description="DLL entry point function",
+                parameters=[
+                    {'name': 'hinstDLL', 'type': 'HINSTANCE', 'description': 'DLL module handle'},
+                    {'name': 'fdwReason', 'type': 'DWORD', 'description': 'Reason for calling'},
+                    {'name': 'lpvReserved', 'type': 'LPVOID', 'description': 'Reserved'}
+                ],
+                return_value={'type': 'BOOL', 'description': 'Success status'},
+                calling_convention='stdcall',
+                tags=['entry_point', 'dll'],
+                confidence=0.8,
+                source='automatic',
+                metadata={'pattern': 'dll_main'}
+            )
+        
+        return None
+    
+    def get_annotation_statistics(self) -> Dict[str, Any]:
+        """Get annotation statistics"""
+        return self.database.get_statistics()
+    
+    def export_annotations(self, output_path: Path, format: str = 'json') -> bool:
+        """Export annotations to file"""
+        try:
+            annotations = {
+                'function_annotations': [
+                    {
+                        'address': hex(ann.address),
+                        'name': ann.name,
+                        'description': ann.description,
+                        'parameters': ann.parameters,
+                        'return_value': ann.return_value,
+                        'calling_convention': ann.calling_convention,
+                        'tags': ann.tags,
+                        'confidence': ann.confidence,
+                        'source': ann.source,
+                        'metadata': ann.metadata
+                    }
+                    for ann in self.database.get_all_function_annotations()
+                ],
+                'comments': [
+                    {
+                        'address': hex(comm.address),
+                        'comment': comm.comment,
+                        'author': comm.author,
+                        'timestamp': comm.timestamp,
+                        'type': comm.type,
+                        'metadata': comm.metadata
+                    }
+                    for comm in self.database.get_all_comments()
+                ]
+            }
+            
+            if format.lower() == 'json':
+                with open(output_path, 'w') as f:
+                    json.dump(annotations, f, indent=2)
+            
+            logger.info(f"Exported annotations to {output_path}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to export annotations: {e}")
+            return False
+    
+    def import_annotations(self, input_path: Path) -> int:
+        """Import annotations from file"""
+        try:
+            with open(input_path, 'r') as f:
+                data = json.load(f)
+            
+            imported_count = 0
+            
+            # Import function annotations
+            for ann_data in data.get('function_annotations', []):
+                annotation = FunctionAnnotation(
+                    address=int(ann_data['address'], 16),
+                    name=ann_data['name'],
+                    description=ann_data['description'],
+                    parameters=ann_data['parameters'],
+                    return_value=ann_data['return_value'],
+                    calling_convention=ann_data['calling_convention'],
+                    tags=ann_data['tags'],
+                    confidence=ann_data['confidence'],
+                    source=ann_data['source'],
+                    metadata=ann_data['metadata']
+                )
+                
+                if self.add_function_annotation(annotation):
+                    imported_count += 1
+            
+            # Import comments
+            for comm_data in data.get('comments', []):
+                comment = CommentAnnotation(
+                    address=int(comm_data['address'], 16),
+                    comment=comm_data['comment'],
+                    author=comm_data['author'],
+                    timestamp=comm_data['timestamp'],
+                    type=comm_data['type'],
+                    metadata=comm_data['metadata']
+                )
+                
+                if self.add_comment(comment):
+                    imported_count += 1
+            
+            logger.info(f"Imported {imported_count} annotations from {input_path}")
+            return imported_count
+            
+        except Exception as e:
+            logger.error(f"Failed to import annotations: {e}")
+            return 0
+    
+    def search_by_tag(self, tag: str) -> List[FunctionAnnotation]:
+        """Search function annotations by tag"""
+        return self.database.search_by_tag(tag)
+    
+    def get_functions_by_confidence(self, min_confidence: float) -> List[FunctionAnnotation]:
+        """Get functions with minimum confidence level"""
+        return self.database.get_functions_by_confidence(min_confidence)
+    
+    def get_unannotated_functions(self, functions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Get functions that don't have annotations"""
+        unannotated = []
+        
+        for func in functions:
+            address = func.get('start_address', 0)
+            if not self.get_function_annotation(address):
+                unannotated.append(func)
+        
+        return unannotated
+    
+    def suggest_annotations(self, func: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Suggest possible annotations for a function"""
+        suggestions = []
+        name = func.get('name', '')
+        instructions = func.get('instructions', [])
+        
+        # Check for known API patterns
+        if name:
+            api_info = self.api_info.get_function_info(name)
+            if api_info:
+                suggestions.append({
+                    'type': 'api_match',
+                    'confidence': api_info.get('confidence', 0.5),
+                    'annotation': api_info
+                })
+        
+        # Check for instruction patterns
+        api_calls = []
+        for insn in instructions:
+            mnemonic = insn.get('mnemonic', '').lower()
+            operands = insn.get('operands', '').lower()
+            
+            if mnemonic == 'call':
+                if any(api in operands for api in ['createfile', 'readfile', 'writefile']):
+                    api_calls.append('file_operations')
+                elif any(api in operands for api in ['createmutex', 'waitforsingleobject']):
+                    api_calls.append('synchronization')
+                elif any(api in operands for api in ['socket', 'connect', 'send', 'recv']):
+                    api_calls.append('networking')
+        
+        if api_calls:
+            suggestions.append({
+                'type': 'pattern_match',
+                'confidence': 0.6,
+                'annotation': {
+                    'description': f"Function performs {', '.join(set(api_calls))}",
+                    'tags': list(set(api_calls))
+                }
+            })
+        
+        return suggestions
