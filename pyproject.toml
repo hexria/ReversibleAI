@@ -9,10 +9,10 @@ description = "Advanced Static & Dynamic Analysis Framework for Malware Analysis
 readme = "README.md"
 license = {text = "MIT"}
 authors = [
-    {name = "ReversibleAI Team", email = "info@reversibleai.com"}
+    {name = "ReversibleAI Team", email = "pentestdatabase@gmail.com"}
 ]
 maintainers = [
-    {name = "ReversibleAI Team", email = "info@reversibleai.com"}
+    {name = "ReversibleAI Team", email = "pentestdatabase@gmail.com"}
 ]
 keywords = ["reverse-engineering", "malware-analysis", "static-analysis", "dynamic-analysis", "ida", "ghidra", "radare2"]
 classifiers = [

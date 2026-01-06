@@ -203,7 +203,7 @@ MIT License - see [LICENSE](LICENSE) file for details
 ## Support
 
 - **Issues**: [GitHub Issues](https://github.com/hexria/ReversibleAI/issues)
-- **Email**: info@reversibleai.com
+- **Email**: pentestdatabase@gmail.com
 
 ## Development Status
 

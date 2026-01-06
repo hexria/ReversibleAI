@@ -7,7 +7,7 @@ with support for IDA, Ghidra, and Radare2.
 
 __version__ = "0.1.0"
 __author__ = "ReversibleAI Team"
-__email__ = "info@reversibleai.com"
+__email__ = "pentestdatabase@gmail.com"
 
 from .core import *
 from .plugins import *
