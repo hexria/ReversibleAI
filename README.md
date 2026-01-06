@@ -1,5 +1,9 @@
 # ReversibleAI
 
+[![PyPI version](https://badge.fury.io/py/reversibleai.svg)](https://badge.fury.io/py/reversibleai)
+[![Python versions](https://img.shields.io/pypi/pyversions/reversibleai.svg)](https://pypi.org/project/reversibleai/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 **ReversibleAI** - Advanced Static & Dynamic Analysis Framework for Malware Analysis and Reverse Engineering
 
 A modern, modular Python framework for binary analysis that bridges the gap between traditional reverse engineering tools and contemporary analysis techniques.
@@ -42,6 +46,11 @@ reversibleai info malware.exe
 **Scan with hash patterns:**
 ```bash
 reversibleai hash-scan malware.exe --signatures signatures.db
+```
+
+**Interactive mode:**
+```bash
+reversibleai interactive
 ```
 
 ### Python API
@@ -100,17 +109,9 @@ report_gen.generate_analysis_report(
 - Python 3.11 or higher
 - See `requirements.txt` for dependencies
 
-## Documentation
-
-For detailed documentation, visit: https://reversibleai.readthedocs.io
-
 ## License
 
 MIT License - see LICENSE file for details
-
-## Contributing
-
-Contributions are welcome! Please see CONTRIBUTING.md for guidelines.
 
 ## Support
 
