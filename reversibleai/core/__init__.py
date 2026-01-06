@@ -9,6 +9,8 @@ from .hash_patterns import *
 from .runtime_emulator import *
 from .annotations import *
 from .reports import *
+from .exceptions import *
+from .logging import *
 
 __all__ = [
     "Loader",
@@ -17,5 +19,11 @@ __all__ = [
     "HashPatternMatcher",
     "RuntimeEmulator",
     "AnnotationManager",
-    "ReportGenerator"
+    "ReportGenerator",
+    "ReversibleAIError",
+    "AnalysisError",
+    "LoaderError",
+    "EmulationError",
+    "setup_logging",
+    "get_logger"
 ]
